@@ -2,4 +2,6 @@
 # MacOS
 .DS_Store
 *checkpoint.ipynb
+*.gz
+
 
