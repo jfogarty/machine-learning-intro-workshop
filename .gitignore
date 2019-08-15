@@ -3,6 +3,7 @@
 .DS_Store
 *checkpoint.ipynb
 *.gz
+*.dot
 
 tmp*/
 
