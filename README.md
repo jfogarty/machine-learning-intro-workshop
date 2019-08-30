@@ -12,3 +12,10 @@ You can even explore this from your Phone or Tablet, but editing will challenge 
   </a>
 </center>
 
+## What to Bring to the Workshop - Be Prepared!
+
+- You **must** have a laptop that can connect to Base2's Wifi and access the Internet, preferably with Chrome
+- Be prepared to run it for **four hours**; bring your AC adaptor, power pack or whatever else you need
+- You **must** have a Google Account to access the Colaboratory (test it with [START HERE](https://colab.research.google.com/github/jfogarty/machine-learning-intro-workshop/blob/master/master.ipynb))
+
+
