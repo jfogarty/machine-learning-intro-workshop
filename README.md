@@ -6,11 +6,13 @@ Press **Start** to begin exploring the [Jupyter Notebooks](https://jupyter.org/)
 
 You can even explore this from your Phone or Tablet, but editing will challenge your patience, probably beyond the levels of human endurance.
 
-<center>
-  <a href="https://colab.research.google.com/github/jfogarty/machine-learning-intro-workshop/blob/master/master.ipynb">
-	<img src="./images/start-here.jpg" />
-  </a>
-</center>
+<figure>
+  <center>
+    <a href="https://colab.research.google.com/github/jfogarty/machine-learning-intro-workshop/blob/master/master.ipynb">
+      <img src="./images/start-here.jpg" />
+    </a>
+  </center>
+</figure>
 
 ## What to Bring to the Workshop - Be Prepared!
 
