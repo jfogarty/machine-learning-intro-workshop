@@ -1,0 +1,460 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "rnn.ipynb",
+      "version": "0.3.2",
+      "provenance": [],
+      "collapsed_sections": [],
+      "machine_shape": "hm"
+    },
+    "kernelspec": {
+      "name": "python2",
+      "display_name": "Python 2"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "63z9uN2RRpdz",
+        "colab_type": "text"
+      },
+      "source": [
+        "# **Recurrent Neural Networks**\n",
+        "\n",
+        "\n",
+        "---\n",
+        "\n",
+        "\n",
+        "\n",
+        "In the spirit of:\n",
+        "\n",
+        "*Yuh can' say it better than Karpathy* \n",
+        "\n",
+        "-John Fogarty\n",
+        "\n",
+        "[The Unreasonable Effectiveness of Recurrent Neural Networks](http://karpathy.github.io/2015/05/21/rnn-effectiveness/)\n",
+        "\n",
+        "## Notbook Goals\n",
+        "Demonstrate a simple, old-school RNN language model that gives you the jones to take it further.\n",
+        "\n",
+        "## Code/Cocepts Agenda\n",
+        "\n",
+        "1) DEPS and DATA: what you need to get started #nltk4life\n",
+        "\n",
+        "3) PREPROCESSING: we should do more, but I'll hand wave and say something about corpus length and UNKs\n",
+        "\n",
+        "4) WORD2VEC: learn to roll your own - not just for sushi any more\n",
+        "\n",
+        "5) REPRESENTATION LAYERS: what, we don't have 94GB of RAM for our onehots!?\n",
+        "\n",
+        "6) MODEL: the sound of one layer clapping\n",
+        "\n",
+        "7) FUN: dead presidents fail to inspire (yet)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "kQqYT8ghn_5j",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 411
+        },
+        "outputId": "46b0d8c1-6521-45bc-8569-0da55c4cf5c9"
+      },
+      "source": [
+        "#DEPS\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "\n",
+        "from keras.models import Sequential\n",
+        "from keras.layers import SimpleRNN, LSTM, Dense\n",
+        "\n",
+        "import nltk\n",
+        "nltk.download(\"inaugural\")\n",
+        "\n",
+        "!pip install gensim\n",
+        "import gensim\n",
+        "\n",
+        "#DATA LOADING\n",
+        "from nltk.corpus import inaugural\n",
+        "inaugural.fileids()\n",
+        "\n",
+        "text_names = inaugural.fileids()\n",
+        "\n",
+        "print(text_names)\n",
+        "\n",
+        "documents_all = [ inaugural.words(text_name) for text_name in text_names ]\n",
+        "\n",
+        "documents_train = [ inaugural.words(text_name)[:25] for text_name in text_names ]\n",
+        "\n",
+        "#PRE-PROCESSING \n",
+        "documents_all = [ map(lambda word: word.lower(), document) for document in documents_all ]\n",
+        "documents_train = [ map(lambda word: word.lower(), document) for document in documents_train ]"
+      ],
+      "execution_count": 68,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "[nltk_data] Downloading package inaugural to /root/nltk_data...\n",
+            "[nltk_data]   Package inaugural is already up-to-date!\n",
+            "Requirement already satisfied: gensim in /usr/local/lib/python2.7/dist-packages (3.6.0)\n",
+            "Requirement already satisfied: smart-open>=1.2.1 in /usr/local/lib/python2.7/dist-packages (from gensim) (1.8.4)\n",
+            "Requirement already satisfied: six>=1.5.0 in /usr/local/lib/python2.7/dist-packages (from gensim) (1.12.0)\n",
+            "Requirement already satisfied: scipy>=0.18.1 in /usr/local/lib/python2.7/dist-packages (from gensim) (1.2.2)\n",
+            "Requirement already satisfied: numpy>=1.11.3 in /usr/local/lib/python2.7/dist-packages (from gensim) (1.16.4)\n",
+            "Requirement already satisfied: bz2file in /usr/local/lib/python2.7/dist-packages (from smart-open>=1.2.1->gensim) (0.98)\n",
+            "Requirement already satisfied: boto>=2.32 in /usr/local/lib/python2.7/dist-packages (from smart-open>=1.2.1->gensim) (2.49.0)\n",
+            "Requirement already satisfied: requests in /usr/local/lib/python2.7/dist-packages (from smart-open>=1.2.1->gensim) (2.21.0)\n",
+            "Requirement already satisfied: boto3 in /usr/local/lib/python2.7/dist-packages (from smart-open>=1.2.1->gensim) (1.9.189)\n",
+            "Requirement already satisfied: urllib3<1.25,>=1.21.1 in /usr/local/lib/python2.7/dist-packages (from requests->smart-open>=1.2.1->gensim) (1.24.3)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python2.7/dist-packages (from requests->smart-open>=1.2.1->gensim) (2019.6.16)\n",
+            "Requirement already satisfied: chardet<3.1.0,>=3.0.2 in /usr/local/lib/python2.7/dist-packages (from requests->smart-open>=1.2.1->gensim) (3.0.4)\n",
+            "Requirement already satisfied: idna<2.9,>=2.5 in /usr/local/lib/python2.7/dist-packages (from requests->smart-open>=1.2.1->gensim) (2.8)\n",
+            "Requirement already satisfied: jmespath<1.0.0,>=0.7.1 in /usr/local/lib/python2.7/dist-packages (from boto3->smart-open>=1.2.1->gensim) (0.9.4)\n",
+            "Requirement already satisfied: botocore<1.13.0,>=1.12.189 in /usr/local/lib/python2.7/dist-packages (from boto3->smart-open>=1.2.1->gensim) (1.12.189)\n",
+            "Requirement already satisfied: s3transfer<0.3.0,>=0.2.0 in /usr/local/lib/python2.7/dist-packages (from boto3->smart-open>=1.2.1->gensim) (0.2.1)\n",
+            "Requirement already satisfied: docutils>=0.10 in /usr/local/lib/python2.7/dist-packages (from botocore<1.13.0,>=1.12.189->boto3->smart-open>=1.2.1->gensim) (0.14)\n",
+            "Requirement already satisfied: python-dateutil<3.0.0,>=2.1; python_version >= \"2.7\" in /usr/local/lib/python2.7/dist-packages (from botocore<1.13.0,>=1.12.189->boto3->smart-open>=1.2.1->gensim) (2.5.3)\n",
+            "Requirement already satisfied: futures<4.0.0,>=2.2.0; python_version == \"2.6\" or python_version == \"2.7\" in /usr/local/lib/python2.7/dist-packages (from s3transfer<0.3.0,>=0.2.0->boto3->smart-open>=1.2.1->gensim) (3.2.0)\n",
+            "[u'1789-Washington.txt', u'1793-Washington.txt', u'1797-Adams.txt', u'1801-Jefferson.txt', u'1805-Jefferson.txt', u'1809-Madison.txt', u'1813-Madison.txt', u'1817-Monroe.txt', u'1821-Monroe.txt', u'1825-Adams.txt', u'1829-Jackson.txt', u'1833-Jackson.txt', u'1837-VanBuren.txt', u'1841-Harrison.txt', u'1845-Polk.txt', u'1849-Taylor.txt', u'1853-Pierce.txt', u'1857-Buchanan.txt', u'1861-Lincoln.txt', u'1865-Lincoln.txt', u'1869-Grant.txt', u'1873-Grant.txt', u'1877-Hayes.txt', u'1881-Garfield.txt', u'1885-Cleveland.txt', u'1889-Harrison.txt', u'1893-Cleveland.txt', u'1897-McKinley.txt', u'1901-McKinley.txt', u'1905-Roosevelt.txt', u'1909-Taft.txt', u'1913-Wilson.txt', u'1917-Wilson.txt', u'1921-Harding.txt', u'1925-Coolidge.txt', u'1929-Hoover.txt', u'1933-Roosevelt.txt', u'1937-Roosevelt.txt', u'1941-Roosevelt.txt', u'1945-Roosevelt.txt', u'1949-Truman.txt', u'1953-Eisenhower.txt', u'1957-Eisenhower.txt', u'1961-Kennedy.txt', u'1965-Johnson.txt', u'1969-Nixon.txt', u'1973-Nixon.txt', u'1977-Carter.txt', u'1981-Reagan.txt', u'1985-Reagan.txt', u'1989-Bush.txt', u'1993-Clinton.txt', u'1997-Clinton.txt', u'2001-Bush.txt', u'2005-Bush.txt', u'2009-Obama.txt', u'2013-Obama.txt', u'2017-Trump.txt']\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "fq55wBFyqrYx",
+        "colab_type": "text"
+      },
+      "source": [
+        "# DEPS\n",
+        "\n",
+        "At this point numpy, pandas, and keras need no introduction.\n",
+        "\n",
+        "### Keras Layers\n",
+        "However, we are going to pull some new layer types, in particular SimpleRNNN, which handles basic recurrent connections behind the scenes.\n",
+        "\n",
+        "**Feed Forward (e.g. Dense)**\n",
+        "\n",
+        "Input ---> Hidden/Procesing Layers ---> Output\n",
+        "\n",
+        "**Recurent**\n",
+        "\n",
+        "Input ---> Hidden/Procesing Layers ----> Output\n",
+        "           \n",
+        "           ^         |\n",
+        "         /   \\     \\ | /\n",
+        "           |        \\ /\n",
+        "           |         |\n",
+        "            <---------\n",
+        "            \n",
+        "**SimpleRNN**\n",
+        "\n",
+        "Input[ t ] + SimpleRNN [ t - 1 ] ---> SimpleRNN\n",
+        "\n",
+        "### NLTK\n",
+        "Standard tool-kit for basic and non-neural NLP (Natural Lanuage Processing). Includeds a large number of gold standard corpora: the NISTs of NLP. Here we take a collection of inaugural speeches from past presidents.\n",
+        "\n",
+        "### GENSIM\n",
+        "Good library focused on topic modeling and other vector space transformations used in NLP. Has a convenient Word2Vec model built-in.\n",
+        "\n",
+        "# PREPROCESSING\n",
+        "Much like with the (non NIST) datasets we've seen, the realworld and its measurments are messy. Language is no exception.\n",
+        "\n",
+        "The **golden rule for preprocessing is: does this feature contribute to my desired outcome**.\n",
+        "\n",
+        "For example, if you want to learn meanings of words, in general capitalized words (excepting proper nouns, of course...) mean the same thing as their all lowercase forms. So, ditch the capitalization.\n",
+        "\n",
+        "The inagural speech corpus is NOT BIG DATA, so that is the extend of the preprocessing here.\n",
+        "\n",
+        "With a larger data set, typical additions are: \n",
+        "the removal of rare words and hapax legomenona (words that only appear once...), where they are replaced with a token representing the unkown, usually \"UNK\".\n",
+        "\n",
+        "Also, especially in tasks were intent or general meaning is paramount, inflected forms are collapsed into their roots or stems: goes, went, going -> go\n",
+        "\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "cuL603LcoTJI",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 54
+        },
+        "outputId": "7e40a13d-cf85-43f0-c41c-753b50d48b07"
+      },
+      "source": [
+        "#GENERATE WORD EMBEDDINGS\n",
+        "features_n = 50\n",
+        "\n",
+        "w2v = gensim.models.Word2Vec(\n",
+        "  documents_all,\n",
+        "  size = features_n,\n",
+        "  window = 3,\n",
+        "  iter = 80,\n",
+        "  workers = 4,\n",
+        "  min_count = 1\n",
+        ")"
+      ],
+      "execution_count": 69,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "W0913 19:23:34.880012 140042713429888 base_any2vec.py:723] consider setting layer size to a multiple of 4 for greater performance\n"
+          ],
+          "name": "stderr"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "G6TKEXlh72C1",
+        "colab_type": "text"
+      },
+      "source": [
+        "#WORD2VEC\n",
+        "\n",
+        "For information on this particular algorithm see this [Tensor Flow tutorial](https://www.tensorflow.org/tutorials/representation/word2vec).\n",
+        "\n",
+        "Fundamentally, the idea is that **\"you shall know a word by he company it keeps\"**, which is a one-liner summary of the ditributional hypothesis of Zellig Harris.\n",
+        "\n",
+        "Of particular importance here, is the variable features_n, which is used to the dimension of the words embeddings."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "bCoE8mLIoUl2",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "#PREPARE REPRESENTATION LAYER HELPERS\n",
+        "tokens = set()\n",
+        "\n",
+        "[ tokens.add(token) for document in documents_train for token in document ]\n",
+        "\n",
+        "tokens_n = len(tokens)\n",
+        "\n",
+        "token2int = { token: i for (i,token) in enumerate(tokens)}\n",
+        "int2token = { i: token for (token, i) in token2int.items() }\n",
+        "\n",
+        "def int2onehot(i):\n",
+        "  onehot = [0 for _ in range(tokens_n)]\n",
+        "  onehot[i] = 1\n",
+        "  return onehot\n",
+        "\n",
+        "tokens_all = [ token2int[word] for document in documents_train for word in document ]\n",
+        "\n",
+        "\n",
+        "#TRANSFORM HIGH-LEVEL REPRESENATION INTO NETWORK IN-OUT REPRESENTATION\n",
+        "\n",
+        "time_steps = 5 #number of prior words to process before weight update\n",
+        "\n",
+        "def data_generator(int_list, time_steps):\n",
+        "  i = 0\n",
+        "  time_steps\n",
+        "  while True:\n",
+        "    current_ints = int_list[i : i + time_steps]\n",
+        "    next_int = int_list[i + time_steps]\n",
+        "    \n",
+        "    in_vec = np.array([ w2v[int2token[current_int]] for current_int in current_ints]).reshape(1, len(current_ints), features_n)\n",
+        "    out_vec = np.array(int2onehot(next_int)).reshape(1, tokens_n)\n",
+        "    \n",
+        "    i += 1\n",
+        "    \n",
+        "    if i == len(int_list) - (time_steps + 1):\n",
+        "      i = 0\n",
+        "    \n",
+        "    yield in_vec, out_vec"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "PFvgLpMC9IDb",
+        "colab_type": "text"
+      },
+      "source": [
+        "# REPRESENTATION LAYERS\n",
+        "\n",
+        "The most straightforward way to pass your training and target data to a keras model is to prepare a lists of the vectors themselves. However this does not scale well with the standard way of representing categorical data - one hot encoding.\n",
+        "\n",
+        "Especially with NLP tasks, your corpus may have 20-40k unique tokens, even after preprocessing. If you represent each word as a 20-40k long array of integers (of any size) you will quikly run out of RAM. For instance, to hold a one-hot encoding of this tiny inaugural corpus in memory takes about 25GB of space.\n",
+        "\n",
+        "One way of dealing with this issue is to use richer, more compact representations of the data, such as the Word2Vec embeddings we generated above.\n",
+        "\n",
+        "Another trick, especially useful in Keras, is to train the model with a data generator. A data generator is normal Python generator function that will yield one batch of inputs and targets when requested.\n",
+        "\n",
+        "Here, we assign a unique integer to each token in the corpus, which is then transformed into a single array of integer IDS. Then we create a generator that will iterrate endlessly over this array, producing a sequence of Word2Vec input vectors, and a onehot output vector."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "K0-hc4gEocrk",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 139
+        },
+        "outputId": "533ad42b-7ddf-4ad3-e442-1eb8123ed21d"
+      },
+      "source": [
+        "#RNN MODEL\n",
+        "model = Sequential()  \n",
+        "\n",
+        "model.add( SimpleRNN(30, activation=\"relu\", input_shape=(None, features_n), dropout=0.1 ) )\n",
+        "\n",
+        "model.add( Dense(tokens_n, activation='softmax') )\n",
+        "\n",
+        "model.compile(\n",
+        "    optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])\n",
+        "\n",
+        "model.fit_generator(data_generator(tokens_all, time_steps), steps_per_epoch=len(tokens_all)-(time_steps+1), epochs = 2)\n",
+        "\n"
+      ],
+      "execution_count": 71,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 1/2\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "stream",
+          "text": [
+            "/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py:29: DeprecationWarning: Call to deprecated `__getitem__` (Method will be removed in 4.0.0, use self.wv.__getitem__() instead).\n"
+          ],
+          "name": "stderr"
+        },
+        {
+          "output_type": "stream",
+          "text": [
+            "1444/1444 [==============================] - 10s 7ms/step - loss: 5.4177 - acc: 0.1323\n",
+            "Epoch 2/2\n",
+            "1444/1444 [==============================] - 8s 5ms/step - loss: 4.1108 - acc: 0.1870\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "<keras.callbacks.History at 0x7f5d60393d50>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 71
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "xZLd4ylf3ljJ",
+        "colab_type": "text"
+      },
+      "source": [
+        "# Model\n",
+        "\n",
+        "The model is simpicity itself - a single SimpleRNN layer that feeds a dense output layer. The input layer will take our Word2Vec encoded sequences of words [w1, w2, w3] which will be used to predict the next word in the sequence (w4), encoded as a onehot.\n",
+        "\n",
+        "The output is produced using softmax so the total of all activations sum to one, and thus can be interpreted as a probability. Ideally, the network learns to concentrate the probability into just a few possible words.\n",
+        "\n",
+        "In statistical NLP, a language model is a probability distribution over sequences of words. Specifically, it answers the question: p(w_n | w_n-1, w_n-2, ... , w_2, w_1), that is, given a sequence of all n-1 prior words, what is the probability of each possible next word w_n.\n",
+        "\n",
+        "Here the recurrent neural network is learning that distribution by being fed sequences of input words, and adjusting its weights to select the next word in the sequence."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "OmA87J-ExwTP",
+        "colab_type": "code",
+        "outputId": "1e32c303-ab1c-4dd9-ebcd-d9b25fd80d43",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 71
+        }
+      },
+      "source": [
+        "def token_to_input(input_token):\n",
+        "  return w2v[ input_token ].reshape(1,1,features_n)\n",
+        "  \n",
+        "def output_to_token(output_vector):\n",
+        "  max_prob = output_vector.max()\n",
+        "  i = list(output_vector).index(max_prob)\n",
+        "  return int2token[i]\n",
+        "\n",
+        "def step_model(input_token):\n",
+        "  input_vector = token_to_input(input_token)\n",
+        "  output_vector = model.predict(input_vector)[0]\n",
+        "  return output_to_token(output_vector)\n",
+        "\n",
+        "sent = []\n",
+        "sent.append(\"my\")\n",
+        "\n",
+        "for i in range(100):\n",
+        "  ws = len(sent)\n",
+        "  next_input = np.array([ w2v[ w ] for w in sent[-(ws):]] ).reshape(1,ws,features_n)\n",
+        "  next_output = model.predict(next_input)[0]\n",
+        "  sent.append(output_to_token(next_output) )\n",
+        "  \n",
+        "  \n",
+        "print(\" \".join(sent))\n"
+      ],
+      "execution_count": 72,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "/usr/local/lib/python2.7/dist-packages/ipykernel_launcher.py:19: DeprecationWarning: Call to deprecated `__getitem__` (Method will be removed in 4.0.0, use self.wv.__getitem__() instead).\n"
+          ],
+          "name": "stderr"
+        },
+        {
+          "output_type": "stream",
+          "text": [
+            "my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , , the my fellow citizens , ,\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "hPpSnbEBFZFt",
+        "colab_type": "text"
+      },
+      "source": [
+        "# FUN\n",
+        "\n",
+        "A language model can be used for many things: word-sense dissambiguation, auto-correction, author and language detection, etc. An albeit silly and fun use of such a model is for text generation.\n",
+        "\n",
+        "Given a starting word, have the mode predict and chose the next word. Then given this new sequence, predict another word, then take this new sequence...\n",
+        "\n"
+      ]
+    }
+  ]
+}
